@@ -8,6 +8,8 @@ import {
   loadConfig,
   configExists,
   findConfigPath,
+  getCurrentEnvironment,
+  getEnvironment,
 } from '../../config/index.js';
 import { createClient } from '../../api/index.js';
 import {
@@ -21,7 +23,6 @@ import {
   findBackupPath,
 } from '../../restore/index.js';
 import type { RestoreMode, RestoreWorkflowResult } from '../../restore/index.js';
-import { getCurrentEnvironment, getEnvironment } from '../../config/index.js';
 
 /**
  * 설정 파일 없음 안내 출력
@@ -261,14 +262,22 @@ export function registerRestoreCommand(program: Command): void {
           }
 
           // 환경 결정
-          const envName = options.env || getCurrentEnvironment(config);
-          const envConfig = getEnvironment(config, envName);
-
-          if (!envConfig) {
-            if (options.json) {
-              console.log(JSON.stringify({ error: `환경을 찾을 수 없습니다: ${envName}` }));
+          let envConfig;
+          let envName: string;
+          try {
+            if (options.env) {
+              envConfig = getEnvironment(config, options.env);
+              envName = options.env;
             } else {
-              console.log(`Error: 환경을 찾을 수 없습니다: ${envName}`);
+              envConfig = getCurrentEnvironment(config);
+              envName = envConfig.name;
+            }
+          } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            if (options.json) {
+              console.log(JSON.stringify({ error: msg }));
+            } else {
+              console.log(`Error: ${msg}`);
             }
             process.exitCode = 1;
             return;
@@ -285,10 +294,7 @@ export function registerRestoreCommand(program: Command): void {
           }
 
           // API 클라이언트 생성
-          const client = createClient({
-            baseUrl: envConfig.url,
-            apiKey: envConfig.apiKey,
-          });
+          const client = createClient(envConfig);
 
           // 복원 모드 검증
           const validModes = ['skip', 'overwrite', 'rename'];
