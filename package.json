@@ -30,6 +30,7 @@
   },
   "dependencies": {
     "commander": "^14.0.2",
+    "simple-git": "^3.30.0",
     "yaml": "^2.8.2"
   }
 }
