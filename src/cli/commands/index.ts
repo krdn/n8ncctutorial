@@ -6,6 +6,9 @@
 import type { Command } from 'commander';
 import { registerStatusCommand } from './status.js';
 import { registerConfigCommand } from './config.js';
+import { registerExportCommand, registerExportAllCommand } from './export.js';
+import { registerImportCommand, registerImportAllCommand } from './import.js';
+import { registerBackupCommand } from './backup.js';
 
 /**
  * 모든 명령어를 프로그램에 등록
@@ -18,8 +21,22 @@ export function registerCommands(program: Command): void {
   // 설정 관리
   registerConfigCommand(program);
 
+  // 워크플로우 내보내기
+  registerExportCommand(program);
+
+  // 워크플로우 전체 내보내기
+  registerExportAllCommand(program);
+
+  // 워크플로우 가져오기
+  registerImportCommand(program);
+
+  // 워크플로우 전체 가져오기
+  registerImportAllCommand(program);
+
+  // 워크플로우 백업
+  registerBackupCommand(program);
+
   // 향후 추가될 명령어들:
-  // - backup: 워크플로우 백업
   // - restore: 워크플로우 복원
   // - deploy: 워크플로우 배포
   // - sync: 워크플로우 동기화
