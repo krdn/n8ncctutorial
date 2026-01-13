@@ -120,11 +120,14 @@ export function validateConfig(config: unknown): ValidationResult {
     if (typeof cfg.backup !== 'object' || cfg.backup === null) {
       errors.push('backup은 객체여야 합니다');
     } else {
-      if (!cfg.backup.directory || typeof cfg.backup.directory !== 'string') {
-        errors.push('backup.directory가 필요합니다');
+      if (!cfg.backup.baseDir || typeof cfg.backup.baseDir !== 'string') {
+        errors.push('backup.baseDir가 필요합니다');
       }
       if (typeof cfg.backup.retention !== 'number' || cfg.backup.retention < 1) {
         errors.push('backup.retention은 1 이상의 숫자여야 합니다');
+      }
+      if (cfg.backup.stripCredentials !== undefined && typeof cfg.backup.stripCredentials !== 'boolean') {
+        errors.push('backup.stripCredentials는 boolean이어야 합니다');
       }
     }
   }
@@ -144,8 +147,9 @@ export function applyDefaults(config: Config): Config {
   return {
     ...config,
     backup: config.backup ?? {
-      directory: './backups',
-      retention: 30,
+      baseDir: './backups',
+      retention: 10,
+      stripCredentials: true,
     },
   };
 }
