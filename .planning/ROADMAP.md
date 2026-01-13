@@ -18,7 +18,7 @@ None
 - [x] **Phase 2: n8n API Integration** - n8n API 연동 기반 구축 ✅
 - [x] **Phase 3: Workflow Export/Import** - 워크플로우 내보내기/가져오기 ✅
 - [x] **Phase 4: Backup System** - 자동 백업 시스템 ✅
-- [ ] **Phase 5: Restore System** - 백업 복원 기능
+- [x] **Phase 5: Restore System** - 백업 복원 기능 ✅
 - [ ] **Phase 6: Version Control** - Git 기반 버전 관리
 - [ ] **Phase 7: Environment Config** - 다중 환경 설정 관리
 - [ ] **Phase 8: Deployment Core** - 핵심 배포 자동화
@@ -80,9 +80,9 @@ Plans:
 **Plans**: 3 plans created
 
 Plans:
-- [ ] 05-01: 백업 목록 조회
-- [ ] 05-02: 특정 백업 복원
-- [ ] 05-03: 선택적 워크플로우 복원
+- [x] 05-01: 백업 목록 조회 ✅
+- [x] 05-02: 특정 백업 복원 ✅
+- [x] 05-03: 선택적 워크플로우 복원 ✅
 
 ### Phase 6: Version Control
 **Goal**: Git 기반 워크플로우 변경 이력 관리
@@ -157,7 +157,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 →
 | 2. n8n API Integration | 3/3 | ✅ Completed | 2026-01-13 |
 | 3. Workflow Export/Import | 3/3 | ✅ Completed | 2026-01-14 |
 | 4. Backup System | 3/3 | ✅ Completed | 2026-01-14 |
-| 5. Restore System | 0/3 | Not started | - |
+| 5. Restore System | 3/3 | ✅ Completed | 2026-01-14 |
 | 6. Version Control | 0/4 | Not started | - |
 | 7. Environment Config | 0/3 | Not started | - |
 | 8. Deployment Core | 0/5 | Not started | - |
