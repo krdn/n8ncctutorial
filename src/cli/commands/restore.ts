@@ -19,8 +19,10 @@ import {
   formatBackupDetailString,
   formatBackupDetail,
   restoreBackup,
+  restoreSelectiveBackup,
   previewRestore,
   findBackupPath,
+  findWorkflowInBackup,
 } from '../../restore/index.js';
 import type { RestoreMode, RestoreWorkflowResult } from '../../restore/index.js';
 
@@ -190,7 +192,10 @@ export function registerRestoreCommand(program: Command): void {
     .option('--mode <mode>', '가져오기 모드 (skip/overwrite)', 'overwrite')
     .option('--activate', '복원 후 워크플로우 활성화')
     .option('--dry-run', '실제 복원 없이 계획만 표시')
+    .option('--ids <ids>', '복원할 워크플로우 ID 목록 (콤마 구분)')
+    .option('--names <names>', '복원할 워크플로우 이름 목록 (콤마 구분)')
     .option('--json', 'JSON 형식으로 출력')
+    // TODO: --interactive 옵션 추가 (inquirer 활용하여 워크플로우 선택)
     .action(
       async (
         backupId: string,
@@ -201,6 +206,8 @@ export function registerRestoreCommand(program: Command): void {
           mode?: string;
           activate?: boolean;
           dryRun?: boolean;
+          ids?: string;
+          names?: string;
           json?: boolean;
         }
       ) => {
@@ -233,12 +240,51 @@ export function registerRestoreCommand(program: Command): void {
             return;
           }
 
+          // 선택적 복원 식별자 파싱
+          const workflowIdentifiers: string[] = [];
+          if (options.ids) {
+            workflowIdentifiers.push(...options.ids.split(',').map((id) => id.trim()));
+          }
+          if (options.names) {
+            workflowIdentifiers.push(...options.names.split(',').map((name) => name.trim()));
+          }
+          const isSelectiveRestore = workflowIdentifiers.length > 0;
+
           // dry-run 모드: 복원 계획만 표시
           if (options.dryRun) {
             const preview = previewRestore(backupPath);
 
+            // 선택적 복원인 경우 필터링
+            let targetWorkflows = preview.workflows;
+            const notFoundIdentifiers: string[] = [];
+
+            if (isSelectiveRestore) {
+              targetWorkflows = [];
+              for (const identifier of workflowIdentifiers) {
+                const wf = findWorkflowInBackup(backupPath, identifier);
+                if (wf) {
+                  // 중복 방지
+                  if (!targetWorkflows.some((tw) => tw.id === wf.id)) {
+                    targetWorkflows.push({
+                      id: wf.id,
+                      name: wf.name,
+                      active: wf.active,
+                    });
+                  }
+                } else {
+                  notFoundIdentifiers.push(identifier);
+                }
+              }
+            }
+
             if (options.json) {
-              console.log(JSON.stringify(preview, null, 2));
+              const result = {
+                ...preview,
+                totalCount: targetWorkflows.length,
+                workflows: targetWorkflows,
+                ...(notFoundIdentifiers.length > 0 && { notFound: notFoundIdentifiers }),
+              };
+              console.log(JSON.stringify(result, null, 2));
             } else {
               console.log('');
               console.log('Restore Plan (dry-run)');
@@ -246,15 +292,24 @@ export function registerRestoreCommand(program: Command): void {
               console.log(`  Backup ID:    ${preview.backupId}`);
               console.log(`  Environment:  ${preview.environment}`);
               console.log(`  n8n URL:      ${preview.n8nUrl}`);
-              console.log(`  Workflows:    ${preview.totalCount}`);
+              console.log(`  Workflows:    ${targetWorkflows.length}${isSelectiveRestore ? ' (selective)' : ''}`);
               console.log('');
               console.log('Workflows to restore:');
               console.log('-'.repeat(60));
-              for (const wf of preview.workflows) {
+              for (const wf of targetWorkflows) {
                 const activeStr = wf.active ? '[active]' : '[inactive]';
                 console.log(`  ${wf.id.padEnd(8)} ${wf.name.slice(0, 40).padEnd(42)} ${activeStr}`);
               }
               console.log('-'.repeat(60));
+
+              if (notFoundIdentifiers.length > 0) {
+                console.log('');
+                console.log('Warning: Not found in backup:');
+                for (const id of notFoundIdentifiers) {
+                  console.log(`  - ${id}`);
+                }
+              }
+
               console.log('');
               console.log('Use without --dry-run to execute restore.');
             }
@@ -317,13 +372,34 @@ export function registerRestoreCommand(program: Command): void {
 
           // 복원 실행
           if (!options.json) {
-            console.log('Restoring workflows...');
+            if (isSelectiveRestore) {
+              console.log(`Restoring ${workflowIdentifiers.length} selected workflow(s)...`);
+            } else {
+              console.log('Restoring workflows...');
+            }
           }
 
-          const result = await restoreBackup(client, backupPath, {
-            mode: restoreMode,
-            activate: options.activate || false,
-          }, onProgress);
+          // 선택적 복원 또는 전체 복원
+          const result = isSelectiveRestore
+            ? await restoreSelectiveBackup(
+                client,
+                backupPath,
+                workflowIdentifiers,
+                {
+                  mode: restoreMode,
+                  activate: options.activate || false,
+                },
+                onProgress
+              )
+            : await restoreBackup(
+                client,
+                backupPath,
+                {
+                  mode: restoreMode,
+                  activate: options.activate || false,
+                },
+                onProgress
+              );
 
           // 결과 출력
           if (options.json) {
