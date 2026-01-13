@@ -14,7 +14,7 @@ import type {
   RestoreWorkflowResult,
   SelectiveRestoreOptions,
 } from './types.js';
-import type { WorkflowInfo } from '../backup/types.js';
+import type { BackupWorkflowInfo } from '../backup/types.js';
 
 /**
  * 복원 진행 상황 콜백 타입
@@ -295,7 +295,7 @@ export function findWorkflowInBackup(
   backupDir: string,
   idOrName: string,
   matchByName: boolean = true
-): WorkflowInfo | null {
+): BackupWorkflowInfo | null {
   const manifest = readManifest(backupDir);
 
   // 먼저 ID로 검색
@@ -355,7 +355,7 @@ export async function restoreSelectiveBackup(
   }
 
   // 워크플로우 필터링
-  const foundWorkflows: WorkflowInfo[] = [];
+  const foundWorkflows: BackupWorkflowInfo[] = [];
   const notFoundIdentifiers: string[] = [];
 
   for (const identifier of workflowIdentifiers) {
