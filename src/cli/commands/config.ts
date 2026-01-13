@@ -45,8 +45,9 @@ function printConfigShow(config: Config, configPath: string): void {
   if (config.backup) {
     console.log('');
     console.log('Backup:');
-    console.log(`  Directory: ${config.backup.directory}`);
-    console.log(`  Retention: ${config.backup.retention} days`);
+    console.log(`  Base Directory: ${config.backup.baseDir}`);
+    console.log(`  Retention: ${config.backup.retention} backups`);
+    console.log(`  Strip Credentials: ${config.backup.stripCredentials}`);
   }
 }
 
