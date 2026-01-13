@@ -12,7 +12,9 @@ import type {
   RestoreOptions,
   RestoreResult,
   RestoreWorkflowResult,
+  SelectiveRestoreOptions,
 } from './types.js';
+import type { WorkflowInfo } from '../backup/types.js';
 
 /**
  * 복원 진행 상황 콜백 타입
@@ -279,4 +281,134 @@ export function previewRestore(
       active: wf.active,
     })),
   };
+}
+
+/**
+ * 백업에서 워크플로우 검색
+ * @description ID 또는 이름으로 백업 내 워크플로우 검색
+ * @param backupDir - 백업 디렉토리 경로
+ * @param idOrName - 검색할 워크플로우 ID 또는 이름
+ * @param matchByName - 이름으로 매칭 허용 여부 (기본: true)
+ * @returns 찾은 워크플로우 정보 또는 null
+ */
+export function findWorkflowInBackup(
+  backupDir: string,
+  idOrName: string,
+  matchByName: boolean = true
+): WorkflowInfo | null {
+  const manifest = readManifest(backupDir);
+
+  // 먼저 ID로 검색
+  const byId = manifest.workflows.find((wf) => wf.id === idOrName);
+  if (byId) {
+    return byId;
+  }
+
+  // 이름으로 검색 (matchByName이 true인 경우만)
+  if (matchByName) {
+    const byName = manifest.workflows.find((wf) => wf.name === idOrName);
+    if (byName) {
+      return byName;
+    }
+  }
+
+  return null;
+}
+
+/**
+ * 선택적 백업 복원
+ * @description 백업에서 특정 워크플로우만 선택하여 복원
+ * @param client - n8n API 클라이언트
+ * @param backupDir - 백업 디렉토리 경로
+ * @param workflowIdentifiers - 복원할 워크플로우 ID 또는 이름 배열
+ * @param options - 선택적 복원 옵션
+ * @param onProgress - 진행 상황 콜백 (선택)
+ * @returns 복원 결과
+ */
+export async function restoreSelectiveBackup(
+  client: N8nApiClient,
+  backupDir: string,
+  workflowIdentifiers: string[],
+  options: Partial<SelectiveRestoreOptions> = {},
+  onProgress?: RestoreProgressCallback
+): Promise<RestoreResult> {
+  const startTime = Date.now();
+  const matchByName = options.matchByName !== false; // 기본값: true
+
+  // 매니페스트 읽기
+  let manifest: BackupManifest;
+  try {
+    manifest = readManifest(backupDir);
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error);
+    return {
+      success: false,
+      backupId: '',
+      totalCount: 0,
+      successCount: 0,
+      failedCount: 0,
+      skippedCount: 0,
+      workflows: [],
+      duration: Date.now() - startTime,
+      error: `매니페스트 읽기 실패: ${msg}`,
+    };
+  }
+
+  // 워크플로우 필터링
+  const foundWorkflows: WorkflowInfo[] = [];
+  const notFoundIdentifiers: string[] = [];
+
+  for (const identifier of workflowIdentifiers) {
+    const workflow = findWorkflowInBackup(backupDir, identifier, matchByName);
+    if (workflow) {
+      // 중복 방지
+      if (!foundWorkflows.some((wf) => wf.id === workflow.id)) {
+        foundWorkflows.push(workflow);
+      }
+    } else {
+      notFoundIdentifiers.push(identifier);
+    }
+  }
+
+  // 찾지 못한 워크플로우 경고
+  if (notFoundIdentifiers.length > 0 && !options.dryRun) {
+    console.warn(
+      `Warning: 다음 워크플로우를 백업에서 찾을 수 없습니다: ${notFoundIdentifiers.join(', ')}`
+    );
+  }
+
+  // targetIds로 변환하여 restoreBackup 호출
+  const targetIds = foundWorkflows.map((wf) => wf.id);
+
+  // dry-run에서 찾지 못한 워크플로우 정보도 반환
+  if (options.dryRun) {
+    const results: RestoreWorkflowResult[] = [
+      ...foundWorkflows.map((wf) => ({
+        originalId: wf.id,
+        name: wf.name,
+        success: true,
+        action: 'skipped' as const,
+      })),
+      ...notFoundIdentifiers.map((id) => ({
+        originalId: id,
+        name: id,
+        success: false,
+        error: '백업에서 찾을 수 없음',
+      })),
+    ];
+
+    return {
+      success: notFoundIdentifiers.length === 0,
+      backupId: manifest.metadata.id,
+      totalCount: workflowIdentifiers.length,
+      successCount: 0,
+      failedCount: notFoundIdentifiers.length,
+      skippedCount: foundWorkflows.length,
+      workflows: results,
+      duration: Date.now() - startTime,
+    };
+  }
+
+  // 실제 복원은 targetIds를 이용해 restoreBackup 호출
+  return restoreBackup(client, backupDir, { ...options, targetIds }, onProgress);
 }
