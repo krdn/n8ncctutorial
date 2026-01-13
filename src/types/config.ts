@@ -27,10 +27,12 @@ export interface EnvironmentConfig {
  * @description 워크플로우 백업 관련 설정
  */
 export interface BackupConfig {
-  /** 백업 파일 저장 디렉토리 */
-  directory: string;
-  /** 백업 보관 기간 (일 단위) */
+  /** 백업 파일 저장 기본 디렉토리 (기본값: ./backups) */
+  baseDir: string;
+  /** 백업 보관 개수 (기본값: 10) */
   retention: number;
+  /** credentials 제거 여부 (기본값: true) */
+  stripCredentials: boolean;
 }
 
 /**
