@@ -9,13 +9,19 @@ import {
   configExists,
   findConfigPath,
 } from '../../config/index.js';
+import { createClient } from '../../api/index.js';
 import {
   getBackupList,
   getBackupDetail,
   formatBackupList,
   formatBackupDetailString,
   formatBackupDetail,
+  restoreBackup,
+  previewRestore,
+  findBackupPath,
 } from '../../restore/index.js';
+import type { RestoreMode, RestoreWorkflowResult } from '../../restore/index.js';
+import { getCurrentEnvironment, getEnvironment } from '../../config/index.js';
 
 /**
  * 설정 파일 없음 안내 출력
@@ -173,7 +179,193 @@ export function registerRestoreCommand(program: Command): void {
       }
     );
 
+  // restore run 하위 명령어
+  restoreCmd
+    .command('run <backupId>')
+    .description('백업에서 워크플로우 복원 실행')
+    .option('-e, --env <name>', '복원 대상 환경 지정')
+    .option('-c, --config <path>', '설정 파일 경로 지정')
+    .option('-d, --dir <path>', '백업 디렉토리 지정')
+    .option('--mode <mode>', '가져오기 모드 (skip/overwrite)', 'overwrite')
+    .option('--activate', '복원 후 워크플로우 활성화')
+    .option('--dry-run', '실제 복원 없이 계획만 표시')
+    .option('--json', 'JSON 형식으로 출력')
+    .action(
+      async (
+        backupId: string,
+        options: {
+          env?: string;
+          config?: string;
+          dir?: string;
+          mode?: string;
+          activate?: boolean;
+          dryRun?: boolean;
+          json?: boolean;
+        }
+      ) => {
+        try {
+          // 설정 확인
+          if (!configExists(options.config)) {
+            if (options.json) {
+              console.log(JSON.stringify({ error: 'Configuration not found' }));
+            } else {
+              printNoConfigMessage();
+            }
+            process.exitCode = 1;
+            return;
+          }
+
+          const config = loadConfig(options.config);
+          const backupDir = resolveBackupDir(options.dir, options.config);
+
+          // 백업 경로 찾기
+          let backupPath: string;
+          try {
+            backupPath = findBackupPath(backupDir, backupId);
+          } catch {
+            if (options.json) {
+              console.log(JSON.stringify({ error: `백업을 찾을 수 없습니다: ${backupId}` }));
+            } else {
+              console.log(`Error: 백업을 찾을 수 없습니다: ${backupId}`);
+            }
+            process.exitCode = 1;
+            return;
+          }
+
+          // dry-run 모드: 복원 계획만 표시
+          if (options.dryRun) {
+            const preview = previewRestore(backupPath);
+
+            if (options.json) {
+              console.log(JSON.stringify(preview, null, 2));
+            } else {
+              console.log('');
+              console.log('Restore Plan (dry-run)');
+              console.log('='.repeat(60));
+              console.log(`  Backup ID:    ${preview.backupId}`);
+              console.log(`  Environment:  ${preview.environment}`);
+              console.log(`  n8n URL:      ${preview.n8nUrl}`);
+              console.log(`  Workflows:    ${preview.totalCount}`);
+              console.log('');
+              console.log('Workflows to restore:');
+              console.log('-'.repeat(60));
+              for (const wf of preview.workflows) {
+                const activeStr = wf.active ? '[active]' : '[inactive]';
+                console.log(`  ${wf.id.padEnd(8)} ${wf.name.slice(0, 40).padEnd(42)} ${activeStr}`);
+              }
+              console.log('-'.repeat(60));
+              console.log('');
+              console.log('Use without --dry-run to execute restore.');
+            }
+            return;
+          }
+
+          // 환경 결정
+          const envName = options.env || getCurrentEnvironment(config);
+          const envConfig = getEnvironment(config, envName);
+
+          if (!envConfig) {
+            if (options.json) {
+              console.log(JSON.stringify({ error: `환경을 찾을 수 없습니다: ${envName}` }));
+            } else {
+              console.log(`Error: 환경을 찾을 수 없습니다: ${envName}`);
+            }
+            process.exitCode = 1;
+            return;
+          }
+
+          if (!options.json) {
+            const configPath = findConfigPath(options.config);
+            if (configPath) {
+              console.log(`Using config: ${configPath}`);
+            }
+            console.log(`Environment: ${envName}`);
+            console.log(`Backup: ${backupId}`);
+            console.log('');
+          }
+
+          // API 클라이언트 생성
+          const client = createClient({
+            baseUrl: envConfig.url,
+            apiKey: envConfig.apiKey,
+          });
+
+          // 복원 모드 검증
+          const validModes = ['skip', 'overwrite', 'rename'];
+          const restoreMode: RestoreMode = validModes.includes(options.mode || '')
+            ? (options.mode as RestoreMode)
+            : 'overwrite';
+
+          // 진행 상황 출력 콜백
+          const onProgress = options.json
+            ? undefined
+            : (current: number, total: number, result: RestoreWorkflowResult) => {
+                const symbol = result.success
+                  ? result.action === 'skipped'
+                    ? '-'
+                    : '+'
+                  : 'x';
+                const action = result.action || 'failed';
+                console.log(`  [${current}/${total}] ${symbol} ${result.name} (${action})`);
+              };
+
+          // 복원 실행
+          if (!options.json) {
+            console.log('Restoring workflows...');
+          }
+
+          const result = await restoreBackup(client, backupPath, {
+            mode: restoreMode,
+            activate: options.activate || false,
+          }, onProgress);
+
+          // 결과 출력
+          if (options.json) {
+            console.log(JSON.stringify(result, null, 2));
+          } else {
+            console.log('');
+            console.log('='.repeat(60));
+            console.log(result.success ? 'Restore completed!' : 'Restore completed with errors');
+            console.log(`  Total:    ${result.totalCount}`);
+            console.log(`  Success:  ${result.successCount}`);
+            console.log(`  Skipped:  ${result.skippedCount}`);
+            console.log(`  Failed:   ${result.failedCount}`);
+            console.log(`  Duration: ${(result.duration / 1000).toFixed(2)}s`);
+
+            if (result.failedCount > 0) {
+              console.log('');
+              console.log('Failed workflows:');
+              for (const wf of result.workflows) {
+                if (!wf.success) {
+                  console.log(`  - ${wf.name}: ${wf.error}`);
+                }
+              }
+            }
+
+            if (result.successCount > 0) {
+              console.log('');
+              console.log('Note: Credentials were stripped during backup.');
+              console.log('      Please configure credentials manually in n8n.');
+            }
+          }
+
+          if (!result.success) {
+            process.exitCode = 1;
+          }
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+
+          if (options.json) {
+            console.log(JSON.stringify({ error: message }));
+          } else {
+            console.log('Error:', message);
+          }
+
+          process.exitCode = 1;
+        }
+      }
+    );
+
   // 향후 추가될 하위 명령어 플레이스홀더
-  // - restore run <backupId>: 실제 복원 실행 (05-02에서 구현)
   // - restore diff <backupId>: 현재 상태와 백업 비교 (05-03에서 구현)
 }
