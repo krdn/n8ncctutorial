@@ -31,6 +31,7 @@ export const DEFAULT_RESTORE_OPTIONS: RestoreOptions = {
   mode: 'skip',
   activate: false,
   dryRun: false,
+  continueOnError: true,
 };
 
 /**
@@ -200,8 +201,10 @@ export async function restoreBackup(
             onProgress(i + 1, targetWorkflows.length, result);
           }
 
-          // continueOnError가 false이면 중단 (기본은 true)
-          // 현재 RestoreOptions에 continueOnError가 없으므로 항상 계속 진행
+          // continueOnError가 false이면 중단
+          if (opts.continueOnError === false) {
+            break;
+          }
         }
       }
     } catch (error) {
@@ -217,6 +220,11 @@ export async function restoreBackup(
 
       if (onProgress) {
         onProgress(i + 1, targetWorkflows.length, result);
+      }
+
+      // continueOnError가 false이면 중단
+      if (opts.continueOnError === false) {
+        break;
       }
     }
   }

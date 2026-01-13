@@ -22,6 +22,8 @@ export interface RestoreOptions {
   targetIds?: string[];
   /** 드라이런 모드 (실제 복원 없이 시뮬레이션) */
   dryRun?: boolean;
+  /** 에러 발생 시 계속 진행 여부 (기본: true) */
+  continueOnError?: boolean;
 }
 
 /**
