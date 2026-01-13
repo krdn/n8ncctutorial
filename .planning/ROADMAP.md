@@ -55,12 +55,12 @@ Plans:
 **Depends on**: Phase 2
 **Research**: Likely (n8n 워크플로우 JSON 구조)
 **Research topics**: 워크플로우 JSON 스키마, credentials 처리 방식
-**Plans**: TBD
+**Plans**: 3 plans created
 
 Plans:
-- [ ] 03-01: 워크플로우 내보내기 기능
-- [ ] 03-02: 워크플로우 가져오기 기능
-- [ ] 03-03: 벌크 내보내기/가져오기
+- [ ] 03-01: 워크플로우 내보내기 (export 모듈 + CLI)
+- [ ] 03-02: 워크플로우 가져오기 (import 모듈 + CLI)
+- [ ] 03-03: 벌크 내보내기/가져오기 (export-all, import-all CLI)
 
 ### Phase 4: Backup System
 **Goal**: 워크플로우를 자동으로 백업하는 시스템
