@@ -27,6 +27,17 @@ export interface RestoreOptions {
 }
 
 /**
+ * 선택적 복원 옵션
+ * @description ID 또는 이름으로 특정 워크플로우만 선택하여 복원
+ */
+export interface SelectiveRestoreOptions extends RestoreOptions {
+  /** 복원할 워크플로우 ID 또는 이름 목록 */
+  workflowIds?: string[];
+  /** 이름으로 매칭 허용 여부 (기본: true) */
+  matchByName?: boolean;
+}
+
+/**
  * 개별 워크플로우 복원 결과
  * @description 각 워크플로우의 복원 결과
  */
