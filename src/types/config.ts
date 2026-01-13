@@ -20,6 +20,40 @@ export interface EnvironmentConfig {
   n8n: N8nInstanceConfig;
   /** 기본 환경 여부 */
   isDefault?: boolean;
+  /** 환경 설명 (예: "개발 서버", "운영 서버") */
+  description?: string;
+  /** 환경 태그 (예: ["local", "test"]) */
+  tags?: string[];
+}
+
+/**
+ * 환경 요약 정보
+ * @description 환경 목록 조회 시 사용되는 요약 정보
+ */
+export interface EnvironmentSummary {
+  /** 환경 이름 */
+  name: string;
+  /** n8n API URL */
+  url: string;
+  /** 기본 환경 여부 */
+  isDefault: boolean;
+  /** 환경 설명 */
+  description?: string;
+  /** 현재 활성 환경 여부 */
+  isCurrent: boolean;
+}
+
+/**
+ * 환경 검증 결과
+ * @description 환경 연결 테스트 결과
+ */
+export interface EnvironmentValidation {
+  /** 환경 이름 */
+  name: string;
+  /** 연결 성공 여부 */
+  isValid: boolean;
+  /** 오류 메시지 목록 */
+  errors: string[];
 }
 
 /**
