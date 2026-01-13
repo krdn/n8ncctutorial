@@ -112,3 +112,36 @@ export interface BackupListItem {
   /** 워크플로우 수 */
   workflowCount: number;
 }
+
+/**
+ * 스케줄 설정
+ * @description cron 기반 스케줄 백업 설정
+ */
+export interface ScheduleConfig {
+  /** 스케줄 활성화 여부 */
+  enabled: boolean;
+  /** cron 표현식 (예: "0 2 * * *" - 매일 새벽 2시) */
+  cronExpression: string;
+  /** 스케줄 설명 (선택) */
+  description?: string;
+}
+
+/**
+ * 보관 정책 설정
+ * @description 백업 보관 정책 관련 설정
+ */
+export interface RetentionConfig {
+  /** 보관할 백업 개수 (0이면 무제한) */
+  count: number;
+  /** 백업 후 자동 정리 여부 */
+  autoCleanup: boolean;
+}
+
+/**
+ * 확장된 백업 옵션
+ * @description 보관 정책 포함 백업 옵션
+ */
+export interface BackupOptionsWithRetention extends BackupOptions {
+  /** 보관 정책 설정 */
+  retention?: RetentionConfig;
+}
