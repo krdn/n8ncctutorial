@@ -9,6 +9,19 @@ import { N8nApiClient } from './client.js';
 // 클라이언트 및 에러 클래스 export
 export { N8nApiClient, N8nApiError } from './client.js';
 
+// 연결 관리 함수 export
+export {
+  testConnection,
+  connectToEnvironment,
+  testAllEnvironments,
+} from './connection.js';
+
+// 연결 관련 타입 export
+export type {
+  ConnectionStatus,
+  ConnectionTestResult,
+} from './connection.js';
+
 // n8n API 타입 export
 export type {
   N8nTag,
