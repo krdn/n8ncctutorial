@@ -12,7 +12,12 @@ import {
   configExists,
   findConfigPath,
 } from '../../config/index.js';
-import { createBackup, createSelectiveBackup } from '../../backup/index.js';
+import {
+  createBackup,
+  createSelectiveBackup,
+  cleanupOldBackups,
+  formatBytes,
+} from '../../backup/index.js';
 
 /**
  * 설정 파일 없음 안내 출력
@@ -61,11 +66,80 @@ function printError(error: string): void {
 }
 
 /**
+ * 정리 결과 출력
+ * @param deletedCount - 삭제된 백업 수
+ * @param freedSpace - 해제된 용량
+ * @param remainingCount - 남은 백업 수
+ */
+function printCleanupResult(
+  deletedCount: number,
+  freedSpace: number,
+  remainingCount: number
+): void {
+  console.log('');
+  console.log('Cleanup completed:');
+  console.log(`  Deleted: ${deletedCount} backup(s)`);
+  console.log(`  Freed: ${formatBytes(freedSpace)}`);
+  console.log(`  Remaining: ${remainingCount} backup(s)`);
+}
+
+/**
+ * cron 설정 예시 출력
+ */
+function printCronExamples(): void {
+  console.log('n8n Workflow Backup - Cron Schedule Examples');
+  console.log('');
+  console.log('Add to crontab with: crontab -e');
+  console.log('');
+  console.log('=== Common Schedule Patterns ===');
+  console.log('');
+  console.log('# Every day at 2:00 AM (recommended)');
+  console.log('0 2 * * * cd /path/to/project && n8n-wfm backup --cleanup >> /var/log/n8n-backup.log 2>&1');
+  console.log('');
+  console.log('# Every 6 hours');
+  console.log('0 */6 * * * cd /path/to/project && n8n-wfm backup --cleanup >> /var/log/n8n-backup.log 2>&1');
+  console.log('');
+  console.log('# Every Monday at 3:00 AM');
+  console.log('0 3 * * 1 cd /path/to/project && n8n-wfm backup --cleanup >> /var/log/n8n-backup.log 2>&1');
+  console.log('');
+  console.log('# Every hour');
+  console.log('0 * * * * cd /path/to/project && n8n-wfm backup --retention 24 --cleanup >> /var/log/n8n-backup.log 2>&1');
+  console.log('');
+  console.log('=== Cron Format ===');
+  console.log('');
+  console.log('┌───────────── minute (0 - 59)');
+  console.log('│ ┌─────────── hour (0 - 23)');
+  console.log('│ │ ┌───────── day of month (1 - 31)');
+  console.log('│ │ │ ┌─────── month (1 - 12)');
+  console.log('│ │ │ │ ┌───── day of week (0 - 6) (Sunday=0)');
+  console.log('│ │ │ │ │');
+  console.log('* * * * * command');
+  console.log('');
+  console.log('=== Options ===');
+  console.log('');
+  console.log('--retention <count>  : Keep only the latest N backups (default: from config)');
+  console.log('--cleanup            : Apply retention policy after backup');
+  console.log('--active-only        : Backup active workflows only');
+  console.log('');
+  console.log('=== Log Rotation (Optional) ===');
+  console.log('');
+  console.log('Create /etc/logrotate.d/n8n-backup:');
+  console.log('');
+  console.log('/var/log/n8n-backup.log {');
+  console.log('    weekly');
+  console.log('    rotate 4');
+  console.log('    compress');
+  console.log('    missingok');
+  console.log('    notifempty');
+  console.log('}');
+}
+
+/**
  * backup 명령어 등록
  * @param program - Commander 프로그램 인스턴스
  */
 export function registerBackupCommand(program: Command): void {
-  program
+  const backupCmd = program
     .command('backup')
     .description('워크플로우 백업 생성')
     .option('-o, --output <dir>', '백업 저장 디렉토리', './backups')
@@ -75,6 +149,8 @@ export function registerBackupCommand(program: Command): void {
     .option('--active-only', '활성화된 워크플로우만 백업')
     .option('--ids <ids>', '특정 워크플로우 ID들만 백업 (콤마 구분)')
     .option('--description <text>', '백업 설명 메모')
+    .option('--retention <count>', '보관할 백업 개수 (0이면 무제한)', parseInt)
+    .option('--cleanup', '백업 후 보관 정책 적용 (오래된 백업 삭제)')
     .action(
       async (options: {
         output: string;
@@ -84,6 +160,8 @@ export function registerBackupCommand(program: Command): void {
         activeOnly?: boolean;
         ids?: string;
         description?: string;
+        retention?: number;
+        cleanup?: boolean;
       }) => {
         // 설정 파일 존재 확인
         if (!configExists(options.config)) {
@@ -201,6 +279,33 @@ export function registerBackupCommand(program: Command): void {
             });
             process.exitCode = 1;
           }
+
+          // 보관 정책 적용 (--cleanup 옵션이 있을 때)
+          if (options.cleanup) {
+            // retention 값 결정: CLI 옵션 > 설정 파일 > 기본값(10)
+            const retentionCount =
+              options.retention ?? config.backup?.retention ?? 10;
+
+            if (retentionCount > 0) {
+              console.log('');
+              console.log(`Applying retention policy (keep: ${retentionCount})...`);
+
+              const cleanupResult = cleanupOldBackups(backupBaseDir, retentionCount);
+
+              if (cleanupResult.deletedCount > 0) {
+                printCleanupResult(
+                  cleanupResult.deletedCount,
+                  cleanupResult.freedSpace,
+                  cleanupResult.remainingCount
+                );
+              } else {
+                console.log('  No old backups to cleanup.');
+              }
+            } else {
+              console.log('');
+              console.log('Retention set to 0 (unlimited), skipping cleanup.');
+            }
+          }
         } catch (error) {
           console.log('Error');
           console.log('');
@@ -210,4 +315,12 @@ export function registerBackupCommand(program: Command): void {
         }
       }
     );
+
+  // cron-example 하위 명령어 등록
+  backupCmd
+    .command('cron-example')
+    .description('시스템 cron 스케줄 설정 예시 출력')
+    .action(() => {
+      printCronExamples();
+    });
 }
