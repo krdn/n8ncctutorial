@@ -1,18 +1,22 @@
 /**
  * 명령어 등록 모듈
- * 모든 CLI 명령어를 등록하는 중앙 관리 모듈
+ * @description 모든 CLI 명령어를 등록하는 중앙 관리 모듈
  */
 
 import type { Command } from 'commander';
 import { registerStatusCommand } from './status.js';
+import { registerConfigCommand } from './config.js';
 
 /**
  * 모든 명령어를 프로그램에 등록
  * @param program - Commander 프로그램 인스턴스
  */
 export function registerCommands(program: Command): void {
-  // 기본 명령어
+  // 상태 확인
   registerStatusCommand(program);
+
+  // 설정 관리
+  registerConfigCommand(program);
 
   // 향후 추가될 명령어들:
   // - backup: 워크플로우 백업

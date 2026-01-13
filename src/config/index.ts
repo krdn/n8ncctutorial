@@ -179,3 +179,6 @@ export function getEnvironment(config: Config, envName: string): EnvironmentConf
 // 모듈 재내보내기
 export { validateConfig, applyDefaults } from './schema.js';
 export type { ValidationResult } from './schema.js';
+
+// 타입 재내보내기
+export type { Config, EnvironmentConfig, N8nInstanceConfig, BackupConfig } from '../types/config.js';
