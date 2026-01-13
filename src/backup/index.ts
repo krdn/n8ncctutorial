@@ -11,6 +11,9 @@ export type {
   BackupOptions,
   BackupResult,
   BackupListItem,
+  ScheduleConfig,
+  RetentionConfig,
+  BackupOptionsWithRetention,
 } from './types.js';
 
 // 저장소 유틸리티 re-export
@@ -28,3 +31,12 @@ export {
 
 // 백업 실행 함수 re-export
 export { createBackup, createSelectiveBackup } from './backup.js';
+
+// 보관 정책(Retention) 유틸리티 re-export
+export type { BackupStats, CleanupResult } from './retention.js';
+export {
+  cleanupOldBackups,
+  getBackupStats,
+  previewCleanup,
+  formatBytes,
+} from './retention.js';
