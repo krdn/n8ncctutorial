@@ -25,3 +25,6 @@ export {
   deleteBackup,
   pruneOldBackups,
 } from './storage.js';
+
+// 백업 실행 함수 re-export
+export { createBackup, createSelectiveBackup } from './backup.js';
