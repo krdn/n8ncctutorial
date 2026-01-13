@@ -77,7 +77,7 @@ Plans:
 **Goal**: 백업에서 워크플로우를 복원하는 기능
 **Depends on**: Phase 4
 **Research**: Unlikely (import 기능 재사용)
-**Plans**: TBD
+**Plans**: 3 plans created
 
 Plans:
 - [ ] 05-01: 백업 목록 조회
