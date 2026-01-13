@@ -5,13 +5,22 @@
 version: "1"
 
 # 현재 활성 환경
+# 이 값은 environments 목록에 정의된 환경 이름 중 하나여야 합니다.
 currentEnvironment: dev
 
 # 환경 설정 목록
+# 여러 n8n 인스턴스를 환경별로 구분하여 관리할 수 있습니다.
 environments:
   # 개발 환경
   - name: dev
+    # 기본 환경 여부 (CLI에서 환경을 지정하지 않으면 이 환경 사용)
     isDefault: true
+    # 환경 설명 (선택): 팀원들이 이해하기 쉬운 설명
+    description: "로컬 개발 서버"
+    # 환경 태그 (선택): 환경을 그룹화하거나 필터링할 때 사용
+    tags:
+      - local
+      - test
     n8n:
       url: http://localhost:5678
       # 환경변수 참조: export N8N_DEV_API_KEY=your-api-key
@@ -19,12 +28,20 @@ environments:
 
   # 스테이징 환경
   - name: staging
+    description: "테스트 및 QA 환경"
+    tags:
+      - remote
+      - test
     n8n:
       url: https://n8n-staging.example.com
       apiKey: ${N8N_STAGING_API_KEY}
 
   # 프로덕션 환경
   - name: prod
+    description: "운영 환경 - 주의하여 사용"
+    tags:
+      - remote
+      - production
     n8n:
       url: https://n8n.example.com
       apiKey: ${N8N_PROD_API_KEY}
@@ -32,6 +49,8 @@ environments:
 # 백업 설정 (선택)
 backup:
   # 백업 파일 저장 디렉토리
-  directory: ./backups
-  # 백업 보관 기간 (일 단위)
-  retention: 30
+  baseDir: ./backups
+  # 백업 보관 개수 (기본값: 10)
+  retention: 10
+  # credentials 제거 여부 (기본값: true)
+  stripCredentials: true

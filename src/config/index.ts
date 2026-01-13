@@ -180,5 +180,21 @@ export function getEnvironment(config: Config, envName: string): EnvironmentConf
 export { validateConfig, applyDefaults } from './schema.js';
 export type { ValidationResult } from './schema.js';
 
+// 환경 관리 유틸리티 재내보내기
+export {
+  listEnvironments,
+  hasEnvironment,
+  getDefaultEnvironment,
+  getEnvironmentNames,
+  isCurrentEnvironment,
+} from './environment.js';
+
 // 타입 재내보내기
-export type { Config, EnvironmentConfig, N8nInstanceConfig, BackupConfig } from '../types/config.js';
+export type {
+  Config,
+  EnvironmentConfig,
+  N8nInstanceConfig,
+  BackupConfig,
+  EnvironmentSummary,
+  EnvironmentValidation,
+} from '../types/config.js';
