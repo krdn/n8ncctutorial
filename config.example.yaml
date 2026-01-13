@@ -1,0 +1,37 @@
+# n8n Workflow Manager 설정 파일
+# 이 파일을 n8n-wfm.config.yaml로 복사하여 사용하세요.
+
+# 설정 파일 버전
+version: "1"
+
+# 현재 활성 환경
+currentEnvironment: dev
+
+# 환경 설정 목록
+environments:
+  # 개발 환경
+  - name: dev
+    isDefault: true
+    n8n:
+      url: http://localhost:5678
+      # 환경변수 참조: export N8N_DEV_API_KEY=your-api-key
+      apiKey: ${N8N_DEV_API_KEY}
+
+  # 스테이징 환경
+  - name: staging
+    n8n:
+      url: https://n8n-staging.example.com
+      apiKey: ${N8N_STAGING_API_KEY}
+
+  # 프로덕션 환경
+  - name: prod
+    n8n:
+      url: https://n8n.example.com
+      apiKey: ${N8N_PROD_API_KEY}
+
+# 백업 설정 (선택)
+backup:
+  # 백업 파일 저장 디렉토리
+  directory: ./backups
+  # 백업 보관 기간 (일 단위)
+  retention: 30
