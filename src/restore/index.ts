@@ -10,6 +10,7 @@ export type {
   RestoreResult,
   RestoreWorkflowResult,
   FormattedBackupDetail,
+  SelectiveRestoreOptions,
 } from './types.js';
 
 // 목록 조회 함수 재내보내기
@@ -26,6 +27,8 @@ export {
   restoreBackup,
   previewRestore,
   findBackupPath,
+  findWorkflowInBackup,
+  restoreSelectiveBackup,
   DEFAULT_RESTORE_OPTIONS,
 } from './restore.js';
 
