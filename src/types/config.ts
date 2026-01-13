@@ -57,6 +57,54 @@ export interface EnvironmentValidation {
 }
 
 /**
+ * Credential 매핑 설정
+ * @description 논리적 credential 이름을 환경별 실제 ID로 매핑
+ */
+export interface CredentialMapping {
+  /** 논리적 credential 이름 (예: "slack-bot", "github-token") */
+  name: string;
+  /** credential 타입 (예: "slackApi", "githubApi") */
+  type: string;
+  /** 환경별 실제 credential ID 매핑 (예: { dev: "1", staging: "5", prod: "12" }) */
+  environments: Record<string, string>;
+}
+
+/**
+ * Credential 변환 정보
+ * @description 두 환경 간 credential ID 변환 맵
+ */
+export interface CredentialTransform {
+  /** 소스 환경 이름 */
+  sourceEnv: string;
+  /** 대상 환경 이름 */
+  targetEnv: string;
+  /** 원본 ID와 새 ID 매핑 목록 */
+  mappings: {
+    /** 원본 환경의 credential ID */
+    originalId: string;
+    /** 대상 환경의 credential ID */
+    newId: string;
+    /** 논리적 credential 이름 (참조용) */
+    name: string;
+    /** credential 타입 (참조용) */
+    type: string;
+  }[];
+}
+
+/**
+ * Credential 매핑 요약 정보
+ * @description 매핑 목록 조회 시 사용되는 요약 정보
+ */
+export interface CredentialMappingSummary {
+  /** 논리적 credential 이름 */
+  name: string;
+  /** credential 타입 */
+  type: string;
+  /** 각 환경별 ID 존재 여부 */
+  environmentStatus: Record<string, boolean>;
+}
+
+/**
  * 백업 설정
  * @description 워크플로우 백업 관련 설정
  */
@@ -82,4 +130,6 @@ export interface Config {
   environments: EnvironmentConfig[];
   /** 백업 설정 (선택) */
   backup?: BackupConfig;
+  /** Credential 매핑 설정 (선택) - 환경별 credential ID 매핑 */
+  credentialMappings?: CredentialMapping[];
 }
