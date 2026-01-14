@@ -54,3 +54,33 @@ backup:
   retention: 10
   # credentials 제거 여부 (기본값: true)
   stripCredentials: true
+
+# Credential 매핑 설정 (선택)
+# 환경간 배포 시 credential ID를 자동으로 변환합니다.
+# name: 논리적 이름 (배포 시 참조용)
+# type: n8n credential 타입 (slackApi, githubApi 등)
+# environments: 각 환경의 실제 credential ID (n8n 설정에서 확인)
+credentialMappings:
+  # Slack API 토큰 예제
+  - name: slack-bot
+    type: slackApi
+    environments:
+      dev: "1"        # 개발 환경의 credential ID
+      staging: "5"    # 스테이징 환경의 credential ID
+      prod: "12"      # 프로덕션 환경의 credential ID
+
+  # GitHub API 토큰 예제
+  - name: github-token
+    type: githubApi
+    environments:
+      dev: "2"
+      staging: "6"
+      prod: "15"
+
+  # PostgreSQL 연결 예제
+  - name: main-database
+    type: postgres
+    environments:
+      dev: "3"
+      staging: "8"
+      prod: "20"

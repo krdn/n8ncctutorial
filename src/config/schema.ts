@@ -3,7 +3,7 @@
  * @description 설정 파일의 유효성을 검증하는 함수들
  */
 
-import type { Config, EnvironmentConfig, N8nInstanceConfig } from '../types/config.js';
+import type { Config, CredentialMapping, EnvironmentConfig, N8nInstanceConfig } from '../types/config.js';
 
 /**
  * 설정 검증 결과
@@ -47,6 +47,51 @@ function validateN8nConfig(config: unknown, envName: string): string[] {
  * @param index - 환경 인덱스 (에러 메시지용)
  * @returns 검증 결과
  */
+/**
+ * credential 매핑 검증
+ * @param mapping - credential 매핑
+ * @param index - 매핑 인덱스 (에러 메시지용)
+ * @param envNames - 설정된 환경 이름들
+ * @returns 오류 메시지 배열
+ */
+function validateCredentialMapping(
+  mapping: unknown,
+  index: number,
+  envNames: Set<string>
+): string[] {
+  const errors: string[] = [];
+  const m = mapping as CredentialMapping;
+
+  if (!m || typeof m !== 'object') {
+    errors.push(`credentialMappings[${index}]: 유효하지 않은 매핑입니다`);
+    return errors;
+  }
+
+  if (!m.name || typeof m.name !== 'string') {
+    errors.push(`credentialMappings[${index}]: name이 필요합니다`);
+    return errors;
+  }
+
+  if (!m.type || typeof m.type !== 'string') {
+    errors.push(`credentialMappings "${m.name}": type이 필요합니다`);
+  }
+
+  if (!m.environments || typeof m.environments !== 'object') {
+    errors.push(`credentialMappings "${m.name}": environments가 필요합니다`);
+  } else {
+    // 환경 이름이 실제 환경과 일치하는지 확인
+    for (const envName of Object.keys(m.environments)) {
+      if (!envNames.has(envName)) {
+        errors.push(
+          `credentialMappings "${m.name}": 환경 "${envName}"가 environments에 정의되지 않았습니다`
+        );
+      }
+    }
+  }
+
+  return errors;
+}
+
 function validateEnvironment(env: unknown, index: number): string[] {
   const errors: string[] = [];
   const environment = env as EnvironmentConfig;
@@ -129,6 +174,34 @@ export function validateConfig(config: unknown): ValidationResult {
       if (cfg.backup.stripCredentials !== undefined && typeof cfg.backup.stripCredentials !== 'boolean') {
         errors.push('backup.stripCredentials는 boolean이어야 합니다');
       }
+    }
+  }
+
+  // credentialMappings 검증 (선택 필드)
+  if (cfg.credentialMappings !== undefined) {
+    if (!Array.isArray(cfg.credentialMappings)) {
+      errors.push('credentialMappings는 배열이어야 합니다');
+    } else {
+      // 환경 이름 세트 생성
+      const envNames = new Set(
+        cfg.environments?.map((e) => (e as EnvironmentConfig).name).filter(Boolean) ?? []
+      );
+
+      // 매핑 이름 중복 체크용 세트
+      const mappingNames = new Set<string>();
+
+      cfg.credentialMappings.forEach((mapping, index) => {
+        errors.push(...validateCredentialMapping(mapping, index, envNames));
+
+        // 매핑 이름 중복 체크
+        const m = mapping as CredentialMapping;
+        if (m.name) {
+          if (mappingNames.has(m.name)) {
+            errors.push(`credentialMappings: 중복된 이름 "${m.name}"`);
+          }
+          mappingNames.add(m.name);
+        }
+      });
     }
   }
 
