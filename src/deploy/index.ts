@@ -19,3 +19,14 @@ export { DEFAULT_DEPLOYMENT_OPTIONS } from './types.js';
 // 파이프라인 클래스 및 타입
 export { DeploymentPipeline } from './pipeline.js';
 export type { ValidationResult, PrepareResult } from './pipeline.js';
+
+// 전송 함수 및 타입
+export {
+  transferWorkflow,
+  transferWorkflows,
+  transferAllWorkflows,
+  prepareWorkflowForTransfer,
+  findWorkflowByNameInTarget,
+  DEFAULT_TRANSFER_OPTIONS,
+} from './transfer.js';
+export type { TransferOptions, TransferResult } from './transfer.js';
