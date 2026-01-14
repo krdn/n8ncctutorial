@@ -189,6 +189,19 @@ export {
   isCurrentEnvironment,
 } from './environment.js';
 
+// 환경 전환 모듈 재내보내기
+export { switchEnvironment, validateEnvironmentSwitch } from './switch.js';
+export type { SwitchResult, SwitchValidationResult } from './switch.js';
+
+// Credential 매핑 유틸리티 재내보내기
+export {
+  getCredentialMapping,
+  getCredentialIdForEnv,
+  buildCredentialTransform,
+  listCredentialMappings,
+  validateCredentialMappings,
+} from './credentials.js';
+
 // 타입 재내보내기
 export type {
   Config,
@@ -197,4 +210,7 @@ export type {
   BackupConfig,
   EnvironmentSummary,
   EnvironmentValidation,
+  CredentialMapping,
+  CredentialTransform,
+  CredentialMappingSummary,
 } from '../types/config.js';
