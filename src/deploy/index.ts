@@ -11,6 +11,7 @@ export type {
   DeployedWorkflow,
   DeploymentSummary,
   DeploymentError,
+  DeploymentRecord,
 } from './types.js';
 
 // 기본 배포 옵션 상수
@@ -44,3 +45,29 @@ export type {
   NodeCredentialInfo,
   NodeTransformResult,
 } from './transform.js';
+
+// 배포 검증 유틸리티
+export {
+  verifyWorkflow,
+  verifyDeployment,
+  compareWorkflows,
+} from './verify.js';
+export type {
+  VerificationResult,
+  VerificationSummary,
+  WorkflowCompareResult,
+} from './verify.js';
+
+// 롤백 유틸리티
+export {
+  saveDeploymentRecord,
+  loadDeploymentRecord,
+  listDeploymentRecords,
+  getLatestDeploymentRecord,
+  rollbackDeployment,
+  deleteDeploymentRecord,
+} from './rollback.js';
+export type {
+  RollbackOptions,
+  RollbackResult,
+} from './rollback.js';

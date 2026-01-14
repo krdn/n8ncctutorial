@@ -14,9 +14,13 @@ import type {
   DeployedWorkflow,
   DeploymentError,
   DeploymentSummary,
+  DeploymentRecord,
 } from './types.js';
 import { DEFAULT_DEPLOYMENT_OPTIONS } from './types.js';
 import { transformCredentialsInWorkflow, type TransformResult } from './transform.js';
+import { verifyDeployment, type VerificationSummary } from './verify.js';
+import { saveDeploymentRecord } from './rollback.js';
+import { createBackup } from '../backup/backup.js';
 
 /**
  * 검증 결과
@@ -279,12 +283,12 @@ export class DeploymentPipeline {
   }
 
   /**
-   * 배포 확인
+   * 단일 워크플로우 존재 확인
    * @description 대상 환경에 워크플로우가 존재하는지 확인
    * @param workflowId - 대상 환경의 워크플로우 ID
    * @returns 존재 여부
    */
-  async verify(workflowId: string): Promise<boolean> {
+  async verifyExists(workflowId: string): Promise<boolean> {
     try {
       await this.targetClient.getWorkflow(workflowId);
       return true;
@@ -294,20 +298,36 @@ export class DeploymentPipeline {
   }
 
   /**
+   * 배포 결과 검증
+   * @description 배포된 모든 워크플로우가 대상 환경에 존재하는지 확인
+   * @param deployedWorkflows - 배포된 워크플로우 목록
+   * @returns 검증 요약
+   */
+  async verifyDeployedWorkflows(
+    deployedWorkflows: DeployedWorkflow[]
+  ): Promise<VerificationSummary> {
+    return verifyDeployment(this.targetClient, deployedWorkflows);
+  }
+
+  /**
    * 전체 파이프라인 실행
-   * @description validate → prepare → transform → deploy → verify 순서로 실행
+   * @description validate → backup → prepare → transform → deploy → verify → save record 순서로 실행
    * @param target - 배포 대상 설정
    * @param options - 배포 옵션 (기본값 적용)
+   * @param baseDir - 백업 및 배포 기록 저장 기본 디렉토리 (선택)
    * @returns 배포 결과
    */
   async runPipeline(
     target: DeploymentTarget,
-    options: Partial<DeploymentOptions> = {}
+    options: Partial<DeploymentOptions> = {},
+    baseDir: string = process.cwd()
   ): Promise<DeploymentResult> {
     const opts: DeploymentOptions = { ...DEFAULT_DEPLOYMENT_OPTIONS, ...options };
     const errors: DeploymentError[] = [];
     const deployedWorkflows: DeployedWorkflow[] = [];
     const timestamp = new Date().toISOString();
+    const deploymentId = timestamp.replace(/[:.]/g, '-');
+    let backupPath: string | undefined;
 
     // 1. 검증 단계
     if (!opts.skipValidation) {
@@ -330,7 +350,41 @@ export class DeploymentPipeline {
       }
     }
 
-    // 2. 준비 단계
+    // 2. 백업 단계 (옵션이 활성화된 경우)
+    if (opts.createBackup) {
+      try {
+        const targetEnvConfig = this.config.environments.find(
+          (env) => env.name === target.targetEnv
+        );
+
+        if (targetEnvConfig) {
+          const backupResult = await createBackup(
+            this.targetClient,
+            {
+              baseDir,
+              environment: target.targetEnv,
+              n8nUrl: targetEnvConfig.n8n.url,
+              description: `배포 전 자동 백업 (${target.sourceEnv} → ${target.targetEnv})`,
+              stripCredentials: true,
+              prettyPrint: true,
+            }
+          );
+
+          if (backupResult.success) {
+            backupPath = backupResult.backupPath;
+            console.log(`[Backup] 대상 환경 백업 완료: ${backupPath}`);
+          } else {
+            console.warn(`[Backup] 백업 실패: ${backupResult.error || '알 수 없는 오류'}`);
+          }
+        }
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.warn(`[Backup] 백업 중 오류 발생: ${msg}`);
+        // 백업 실패해도 배포는 계속 진행
+      }
+    }
+
+    // 3. 준비 단계
     let prepareResult: PrepareResult;
     try {
       prepareResult = await this.prepare(target);
@@ -379,7 +433,7 @@ export class DeploymentPipeline {
       };
     }
 
-    // 3-4. 각 워크플로우에 대해 transform → deploy
+    // 4-5. 각 워크플로우에 대해 transform → deploy
     for (const workflow of workflows) {
       try {
         // credential 변환
@@ -392,19 +446,6 @@ export class DeploymentPipeline {
           opts
         );
         deployedWorkflows.push(deployed);
-
-        // 5. 검증 (skipped가 아닌 경우만)
-        if (deployed.action !== 'skipped') {
-          const verified = await this.verify(deployed.targetId);
-          if (!verified) {
-            errors.push({
-              workflowId: workflow.id,
-              workflowName: workflow.name,
-              phase: 'verify',
-              message: `배포 후 확인 실패: 대상 환경에서 워크플로우를 찾을 수 없습니다`,
-            });
-          }
-        }
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         errors.push({
@@ -416,7 +457,51 @@ export class DeploymentPipeline {
       }
     }
 
-    // 요약 생성
+    // 6. 배포된 워크플로우 검증
+    const actuallyDeployed = deployedWorkflows.filter((w) => w.action !== 'skipped');
+    if (actuallyDeployed.length > 0) {
+      const verificationSummary = await this.verifyDeployedWorkflows(actuallyDeployed);
+
+      // 검증 실패한 워크플로우를 에러에 추가
+      for (const result of verificationSummary.results) {
+        if (!result.exists) {
+          errors.push({
+            workflowId: result.workflowId,
+            workflowName: result.workflowName,
+            phase: 'verify',
+            message: result.error || '대상 환경에서 워크플로우를 찾을 수 없습니다',
+          });
+        }
+      }
+    }
+
+    // 7. 배포 기록 저장
+    const deploymentRecord: DeploymentRecord = {
+      id: deploymentId,
+      timestamp,
+      sourceEnv: target.sourceEnv,
+      targetEnv: target.targetEnv,
+      workflows: deployedWorkflows
+        .filter((w) => w.action !== 'skipped')
+        .map((w) => ({
+          originalId: w.workflowId,
+          targetId: w.targetId,
+        })),
+      backupPath,
+    };
+
+    // 배포된 워크플로우가 있는 경우만 기록 저장
+    if (deploymentRecord.workflows.length > 0) {
+      try {
+        await saveDeploymentRecord(deploymentRecord, baseDir);
+        console.log(`[Record] 배포 기록 저장: ${deploymentId}`);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.warn(`[Record] 배포 기록 저장 실패: ${msg}`);
+      }
+    }
+
+    // 8. 요약 생성
     const summary: DeploymentSummary = {
       total: workflows.length,
       created: deployedWorkflows.filter((w) => w.action === 'created').length,
