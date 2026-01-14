@@ -6,10 +6,12 @@
 import type { Command } from 'commander';
 import { createClient } from '../../api/index.js';
 import { loadConfig } from '../../config/index.js';
-import type { AlertConfig, AlertSeverity } from '../../alert/types.js';
+import type { AlertConfig, AlertRule, AlertRuleCondition, AlertSeverity } from '../../alert/types.js';
 import { sendAlerts, summarizeResults, createAlertMessage } from '../../alert/send.js';
 import { detectErrors } from '../../alert/detector.js';
 import { triggerAlertsForErrors } from '../../alert/trigger.js';
+import { loadRules, saveRules, createDefaultRules, DEFAULT_RULES_PATH } from '../../alert/rules.js';
+import { createWatcher } from '../../alert/watcher.js';
 import type { EnvironmentConfig } from '../../types/config.js';
 
 // ANSI 색상 코드
@@ -198,6 +200,183 @@ export function registerAlertCommand(program: Command): void {
         }
       }
     });
+
+  // alert rules - 설정된 알림 규칙 목록
+  alertCmd
+    .command('rules')
+    .description('설정된 알림 규칙 목록 표시')
+    .option('-c, --config <path>', '설정 파일 경로')
+    .option('--rules-file <path>', '규칙 파일 경로', DEFAULT_RULES_PATH)
+    .action(async (options) => {
+      const rules = await loadRules(options.rulesFile);
+
+      console.log(`${colors.bold}알림 규칙 목록:${colors.reset}`);
+      console.log(`  규칙 파일: ${options.rulesFile}`);
+      console.log('');
+
+      if (rules.length === 0) {
+        console.log(`${colors.yellow}  설정된 규칙이 없습니다.${colors.reset}`);
+        console.log(`  'n8n-wfm alert init'으로 기본 규칙을 생성하세요.`);
+        return;
+      }
+
+      for (const rule of rules) {
+        const status = rule.enabled
+          ? `${colors.green}활성${colors.reset}`
+          : `${colors.red}비활성${colors.reset}`;
+        const condition = formatRuleCondition(rule.condition);
+
+        console.log(`  ${colors.bold}${rule.id}${colors.reset} - ${rule.name}`);
+        console.log(`    상태: ${status}`);
+        console.log(`    조건: ${condition}`);
+        console.log(`    채널: ${rule.channels.join(', ')}`);
+        console.log(`    심각도: ${rule.severity}`);
+        if (rule.cooldown) {
+          console.log(`    쿨다운: ${rule.cooldown}초`);
+        }
+        if (rule.workflowIds && rule.workflowIds.length > 0) {
+          console.log(`    대상 워크플로우: ${rule.workflowIds.join(', ')}`);
+        }
+        console.log('');
+      }
+    });
+
+  // alert watch - 규칙 기반 알림 체크
+  alertCmd
+    .command('watch')
+    .description('한 번 체크하고 규칙 기반 알림 전송')
+    .option('-c, --config <path>', '설정 파일 경로')
+    .option('-e, --env <name>', '환경 지정')
+    .option('--rules-file <path>', '규칙 파일 경로', DEFAULT_RULES_PATH)
+    .option('--dry-run', '알림 전송 없이 매칭 결과만 출력')
+    .action(async (options) => {
+      const config = await loadConfig(options.config);
+      const alertConfig = config.alerts;
+
+      if (!alertConfig) {
+        console.log(`${colors.yellow}알림 설정이 없습니다.${colors.reset}`);
+        return;
+      }
+
+      // 환경 결정
+      const envName = options.env ?? config.currentEnvironment;
+      const envConfig = config.environments.find((e: EnvironmentConfig) => e.name === envName);
+
+      if (!envConfig) {
+        console.error(`${colors.red}환경 "${envName}"을(를) 찾을 수 없습니다.${colors.reset}`);
+        process.exit(1);
+      }
+
+      // 규칙 로드
+      const rules = await loadRules(options.rulesFile);
+
+      if (rules.length === 0) {
+        console.log(`${colors.yellow}설정된 규칙이 없습니다.${colors.reset}`);
+        return;
+      }
+
+      const activeRules = rules.filter((r: AlertRule) => r.enabled);
+      console.log(`${colors.blue}규칙 기반 알림 체크 중... (환경: ${envName}, 활성 규칙: ${activeRules.length}개)${colors.reset}`);
+
+      if (options.dryRun) {
+        console.log(`${colors.yellow}(--dry-run 모드: 알림 전송 생략)${colors.reset}`);
+
+        // 오류 감지만 수행
+        const client = createClient(envConfig);
+        const detection = await detectErrors(client, {
+          since: new Date(Date.now() - 60 * 60 * 1000), // 1시간 전
+        });
+
+        console.log('');
+        console.log(`${colors.bold}체크 결과:${colors.reset}`);
+        console.log(`  감지된 오류: ${detection.executions.length}건`);
+        console.log(`  활성 규칙: ${activeRules.length}개`);
+        return;
+      }
+
+      // Watcher 생성 및 실행
+      const client = createClient(envConfig);
+      const watcher = createWatcher(client, alertConfig, rules);
+
+      const result = await watcher.checkOnce();
+
+      console.log('');
+      console.log(`${colors.bold}체크 결과:${colors.reset}`);
+      console.log(`  체크한 실행: ${result.checked}`);
+      console.log(`  매칭된 규칙: ${result.matched}`);
+      console.log(`  전송된 알림: ${colors.green}${result.sent}${colors.reset}`);
+
+      if (result.errors.length > 0) {
+        console.log('');
+        console.log(`${colors.red}오류 목록:${colors.reset}`);
+        for (const error of result.errors) {
+          console.log(`  - ${error}`);
+        }
+      }
+    });
+
+  // alert init - 기본 규칙 파일 생성
+  alertCmd
+    .command('init')
+    .description('기본 알림 규칙 파일 생성')
+    .option('--rules-file <path>', '규칙 파일 경로', DEFAULT_RULES_PATH)
+    .option('--force', '기존 파일 덮어쓰기')
+    .action(async (options) => {
+      // 기존 규칙 확인
+      const existingRules = await loadRules(options.rulesFile);
+
+      if (existingRules.length > 0 && !options.force) {
+        console.log(`${colors.yellow}이미 규칙 파일이 존재합니다: ${options.rulesFile}${colors.reset}`);
+        console.log(`  기존 규칙 수: ${existingRules.length}`);
+        console.log(`  덮어쓰려면 --force 옵션을 사용하세요.`);
+        return;
+      }
+
+      // 기본 규칙 생성
+      const defaultRules = createDefaultRules();
+      await saveRules(options.rulesFile, defaultRules);
+
+      console.log(`${colors.green}기본 알림 규칙 파일이 생성되었습니다.${colors.reset}`);
+      console.log(`  파일: ${options.rulesFile}`);
+      console.log(`  규칙 수: ${defaultRules.length}`);
+      console.log('');
+      console.log(`${colors.bold}생성된 규칙:${colors.reset}`);
+      for (const rule of defaultRules) {
+        console.log(`  - ${rule.id}: ${rule.name}`);
+      }
+    });
+}
+
+/**
+ * 규칙 조건 포맷팅
+ */
+function formatRuleCondition(condition: AlertRuleCondition): string {
+  switch (condition.type) {
+    case 'error':
+      return '에러 발생 시';
+    case 'success_rate':
+      return `성공률 ${formatOperator(condition.operator)} ${condition.threshold}%`;
+    case 'duration':
+      return `실행 시간 ${formatOperator(condition.operator)} ${condition.threshold}ms`;
+    default:
+      return '알 수 없음';
+  }
+}
+
+/**
+ * 연산자 포맷팅
+ */
+function formatOperator(operator?: string): string {
+  switch (operator) {
+    case 'lt':
+      return '<';
+    case 'gt':
+      return '>';
+    case 'eq':
+      return '=';
+    default:
+      return '<';
+  }
 }
 
 /**

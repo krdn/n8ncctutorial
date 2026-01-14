@@ -128,3 +128,58 @@ export interface AlertConfig {
   /** 채널 설정 목록 */
   channels: AlertChannelConfig[];
 }
+
+/**
+ * 알림 규칙 조건 타입
+ */
+export type AlertRuleConditionType = 'error' | 'success_rate' | 'duration';
+
+/**
+ * 알림 규칙 조건 연산자
+ */
+export type AlertRuleOperator = 'lt' | 'gt' | 'eq';
+
+/**
+ * 알림 규칙 조건
+ * @description 알림이 트리거되는 조건 정의
+ */
+export interface AlertRuleCondition {
+  /** 조건 타입 (error: 에러 발생, success_rate: 성공률, duration: 실행 시간) */
+  type: AlertRuleConditionType;
+  /** 임계값 (success_rate: 백분율, duration: 밀리초) */
+  threshold?: number;
+  /** 비교 연산자 (lt: 미만, gt: 초과, eq: 같음) */
+  operator?: AlertRuleOperator;
+}
+
+/**
+ * 알림 규칙
+ * @description 알림 발생 조건과 대상을 정의하는 규칙
+ */
+export interface AlertRule {
+  /** 규칙 고유 ID */
+  id: string;
+  /** 규칙 이름 */
+  name: string;
+  /** 규칙 활성화 여부 */
+  enabled: boolean;
+  /** 알림 조건 */
+  condition: AlertRuleCondition;
+  /** 대상 워크플로우 ID 목록 (없으면 전체) */
+  workflowIds?: string[];
+  /** 알림 채널 이름 목록 */
+  channels: string[];
+  /** 알림 심각도 */
+  severity: AlertSeverity;
+  /** 중복 알림 방지 쿨다운 (초) */
+  cooldown?: number;
+}
+
+/**
+ * 알림 규칙 설정
+ * @description 규칙 파일 구조
+ */
+export interface AlertRulesConfig {
+  /** 규칙 목록 */
+  rules: AlertRule[];
+}

@@ -41,3 +41,26 @@ export {
   triggerAlertsForErrors,
   createSummaryAlertMessage,
 } from './trigger.js';
+
+// 알림 규칙 export
+export type {
+  AlertRuleConditionType,
+  AlertRuleOperator,
+  AlertRuleCondition,
+  AlertRule,
+  AlertRulesConfig,
+} from './types.js';
+
+export type { RuleContext } from './rules.js';
+export {
+  loadRules,
+  saveRules,
+  evaluateRule,
+  findMatchingRules,
+  createDefaultRules,
+  DEFAULT_RULES_PATH,
+} from './rules.js';
+
+// Watcher export
+export type { WatcherState, WatchResult, AlertWatcher } from './watcher.js';
+export { createWatcher } from './watcher.js';
