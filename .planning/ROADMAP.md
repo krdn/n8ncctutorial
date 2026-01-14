@@ -127,12 +127,12 @@ Plans:
 **Depends on**: Phase 2
 **Research**: Likely (n8n 실행 API, 상태 폴링 전략)
 **Research topics**: n8n executions API, 실행 상태 조회, 실시간 모니터링 방법
-**Plans**: TBD
+**Plans**: 3 plans created
 
 Plans:
-- [ ] 09-01: 실행 상태 조회 API
-- [ ] 09-02: 워크플로우 상태 대시보드 (CLI)
-- [ ] 09-03: 실행 이력 조회
+- [ ] 09-01: 모니터링 모듈 (타입, 실행 조회 함수)
+- [ ] 09-02: 모니터링 CLI 명령어 (monitor, monitor workflow)
+- [ ] 09-03: 실행 이력 조회 (monitor history, monitor execution)
 
 ### Phase 10: Alerting
 **Goal**: 워크플로우 오류 발생 시 알림 전송
