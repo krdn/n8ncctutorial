@@ -118,6 +118,73 @@ export interface BackupConfig {
 }
 
 /**
+ * 알림 채널 타입
+ */
+export type AlertChannelType = 'slack' | 'email' | 'webhook';
+
+/**
+ * 알림 심각도
+ */
+export type AlertSeverity = 'info' | 'warning' | 'error' | 'critical';
+
+/**
+ * Slack 채널 설정
+ */
+export interface SlackChannelConfig {
+  type: 'slack';
+  name?: string;
+  webhookUrl: string;
+  username?: string;
+  iconEmoji?: string;
+  channel?: string;
+}
+
+/**
+ * Email 채널 설정
+ */
+export interface EmailChannelConfig {
+  type: 'email';
+  name?: string;
+  host: string;
+  port: number;
+  secure: boolean;
+  auth?: {
+    user: string;
+    pass: string;
+  };
+  from: string;
+  to: string | string[];
+}
+
+/**
+ * Webhook 채널 설정
+ */
+export interface WebhookChannelConfig {
+  type: 'webhook';
+  name?: string;
+  url: string;
+  method?: 'GET' | 'POST' | 'PUT' | 'PATCH';
+  headers?: Record<string, string>;
+  authorization?: string;
+}
+
+/**
+ * 알림 채널 설정 유니온 타입
+ */
+export type AlertChannelConfig = SlackChannelConfig | EmailChannelConfig | WebhookChannelConfig;
+
+/**
+ * 알림 설정
+ * @description 알림 시스템 설정
+ */
+export interface AlertConfig {
+  /** 알림 활성화 여부 */
+  enabled: boolean;
+  /** 채널 설정 목록 */
+  channels: AlertChannelConfig[];
+}
+
+/**
  * 전체 애플리케이션 설정
  * @description n8n-workflow-manager의 전체 설정 구조
  */
@@ -132,4 +199,6 @@ export interface Config {
   backup?: BackupConfig;
   /** Credential 매핑 설정 (선택) - 환경별 credential ID 매핑 */
   credentialMappings?: CredentialMapping[];
+  /** 알림 설정 (선택) */
+  alerts?: AlertConfig;
 }

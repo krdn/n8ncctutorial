@@ -3,7 +3,14 @@
  * @description 설정 파일의 유효성을 검증하는 함수들
  */
 
-import type { Config, CredentialMapping, EnvironmentConfig, N8nInstanceConfig } from '../types/config.js';
+import type {
+  AlertChannelConfig,
+  AlertConfig,
+  Config,
+  CredentialMapping,
+  EnvironmentConfig,
+  N8nInstanceConfig,
+} from '../types/config.js';
 
 /**
  * 설정 검증 결과
@@ -47,6 +54,96 @@ function validateN8nConfig(config: unknown, envName: string): string[] {
  * @param index - 환경 인덱스 (에러 메시지용)
  * @returns 검증 결과
  */
+/**
+ * 알림 채널 설정 검증
+ * @param channel - 채널 설정
+ * @param index - 채널 인덱스 (에러 메시지용)
+ * @returns 오류 메시지 배열
+ */
+function validateAlertChannel(channel: unknown, index: number): string[] {
+  const errors: string[] = [];
+  const ch = channel as AlertChannelConfig;
+
+  if (!ch || typeof ch !== 'object') {
+    errors.push(`alerts.channels[${index}]: 유효하지 않은 채널 설정입니다`);
+    return errors;
+  }
+
+  if (!ch.type || !['slack', 'email', 'webhook'].includes(ch.type)) {
+    errors.push(`alerts.channels[${index}]: type은 'slack', 'email', 'webhook' 중 하나여야 합니다`);
+    return errors;
+  }
+
+  // 채널 타입별 검증
+  switch (ch.type) {
+    case 'slack': {
+      const slack = ch as { webhookUrl?: string };
+      if (!slack.webhookUrl || typeof slack.webhookUrl !== 'string') {
+        errors.push(`alerts.channels[${index}] (slack): webhookUrl이 필요합니다`);
+      } else if (!slack.webhookUrl.startsWith('https://hooks.slack.com/')) {
+        errors.push(`alerts.channels[${index}] (slack): webhookUrl은 https://hooks.slack.com/으로 시작해야 합니다`);
+      }
+      break;
+    }
+    case 'email': {
+      const email = ch as { host?: string; port?: number; from?: string; to?: unknown };
+      if (!email.host || typeof email.host !== 'string') {
+        errors.push(`alerts.channels[${index}] (email): host가 필요합니다`);
+      }
+      if (typeof email.port !== 'number') {
+        errors.push(`alerts.channels[${index}] (email): port는 숫자여야 합니다`);
+      }
+      if (!email.from || typeof email.from !== 'string') {
+        errors.push(`alerts.channels[${index}] (email): from이 필요합니다`);
+      }
+      if (!email.to || (typeof email.to !== 'string' && !Array.isArray(email.to))) {
+        errors.push(`alerts.channels[${index}] (email): to가 필요합니다`);
+      }
+      break;
+    }
+    case 'webhook': {
+      const webhook = ch as { url?: string };
+      if (!webhook.url || typeof webhook.url !== 'string') {
+        errors.push(`alerts.channels[${index}] (webhook): url이 필요합니다`);
+      } else if (!webhook.url.startsWith('http://') && !webhook.url.startsWith('https://')) {
+        errors.push(`alerts.channels[${index}] (webhook): url은 http:// 또는 https://로 시작해야 합니다`);
+      }
+      break;
+    }
+  }
+
+  return errors;
+}
+
+/**
+ * 알림 설정 검증
+ * @param config - 알림 설정
+ * @returns 오류 메시지 배열
+ */
+function validateAlertConfig(config: unknown): string[] {
+  const errors: string[] = [];
+  const alert = config as AlertConfig;
+
+  if (!alert || typeof alert !== 'object') {
+    errors.push('alerts: 유효하지 않은 알림 설정입니다');
+    return errors;
+  }
+
+  if (typeof alert.enabled !== 'boolean') {
+    errors.push('alerts.enabled는 boolean이어야 합니다');
+  }
+
+  if (!Array.isArray(alert.channels)) {
+    errors.push('alerts.channels는 배열이어야 합니다');
+  } else {
+    alert.channels.forEach((channel, index) => {
+      errors.push(...validateAlertChannel(channel, index));
+    });
+  }
+
+  return errors;
+}
+
 /**
  * credential 매핑 검증
  * @param mapping - credential 매핑
@@ -203,6 +300,11 @@ export function validateConfig(config: unknown): ValidationResult {
         }
       });
     }
+  }
+
+  // alerts 검증 (선택 필드)
+  if (cfg.alerts !== undefined) {
+    errors.push(...validateAlertConfig(cfg.alerts));
   }
 
   return {
