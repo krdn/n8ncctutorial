@@ -114,3 +114,29 @@ export const DEFAULT_DEPLOYMENT_OPTIONS: DeploymentOptions = {
   overwrite: false,
   createBackup: true,
 };
+
+/**
+ * 배포 기록
+ * @description 배포 이력 및 롤백을 위한 정보 저장
+ */
+export interface DeploymentRecord {
+  /** 배포 ID (타임스탬프 기반) */
+  id: string;
+  /** 배포 시각 (ISO 형식) */
+  timestamp: string;
+  /** 소스 환경 이름 */
+  sourceEnv: string;
+  /** 대상 환경 이름 */
+  targetEnv: string;
+  /** 배포된 워크플로우 정보 */
+  workflows: {
+    /** 소스 환경의 원본 워크플로우 ID */
+    originalId: string;
+    /** 대상 환경의 워크플로우 ID */
+    targetId: string;
+    /** 대상 환경의 이전 워크플로우 ID (업데이트 시) */
+    previousTargetId?: string;
+  }[];
+  /** 배포 전 백업 경로 */
+  backupPath?: string;
+}
