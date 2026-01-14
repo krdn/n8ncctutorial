@@ -21,7 +21,7 @@ None
 - [x] **Phase 5: Restore System** - 백업 복원 기능 ✅
 - [x] **Phase 6: Version Control** - Git 기반 버전 관리 ✅
 - [x] **Phase 7: Environment Config** - 다중 환경 설정 관리 ✅
-- [ ] **Phase 8: Deployment Core** - 핵심 배포 자동화
+- [x] **Phase 8: Deployment Core** - 핵심 배포 자동화 ✅
 - [ ] **Phase 9: Monitoring** - 워크플로우 모니터링
 - [ ] **Phase 10: Alerting** - 오류 알림 시스템
 
@@ -116,11 +116,11 @@ Plans:
 **Plans**: TBD
 
 Plans:
-- [ ] 08-01: 배포 파이프라인 설계
-- [ ] 08-02: 환경간 워크플로우 전송
-- [ ] 08-03: credential 매핑 처리
-- [ ] 08-04: 배포 검증 및 롤백
-- [ ] 08-05: 배포 CLI 명령어
+- [x] 08-01: 배포 타입 정의 및 파이프라인 설계 ✅
+- [x] 08-02: Credential 변환 유틸리티 ✅
+- [x] 08-03: 배포 검증 유틸리티 ✅
+- [x] 08-04: 롤백 기능 구현 ✅
+- [x] 08-05: 배포 CLI 명령어 ✅
 
 ### Phase 9: Monitoring
 **Goal**: 워크플로우 실행 상태 모니터링
@@ -160,6 +160,6 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 →
 | 5. Restore System | 3/3 | ✅ Completed | 2026-01-14 |
 | 6. Version Control | 4/4 | ✅ Completed | 2026-01-14 |
 | 7. Environment Config | 3/3 | ✅ Completed | 2026-01-14 |
-| 8. Deployment Core | 0/5 | Not started | - |
+| 8. Deployment Core | 5/5 | ✅ Completed | 2026-01-14 |
 | 9. Monitoring | 0/3 | Not started | - |
 | 10. Alerting | 0/3 | Not started | - |
