@@ -15,11 +15,32 @@ import {
 import {
   fetchMonitoringData,
   getWorkflowStats,
+  getExecutions,
   type ExecutionFilter,
   type ExecutionSummary,
   type WorkflowExecutionStats,
 } from '../../monitor/index.js';
 import type { N8nExecution, N8nExecutionStatus } from '../../types/n8n.js';
+
+/**
+ * 날짜 문자열 파싱
+ * @description YYYY-MM-DD 또는 YYYY-MM-DDTHH:mm:ss 형식 지원
+ * @param dateStr - 날짜 문자열
+ * @returns 파싱된 Date 또는 undefined
+ */
+function parseDate(dateStr: string): Date | undefined {
+  const datePattern = /^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}(:\d{2})?)?$/;
+  if (!datePattern.test(dateStr)) {
+    return undefined;
+  }
+
+  const date = new Date(dateStr);
+  if (isNaN(date.getTime())) {
+    return undefined;
+  }
+
+  return date;
+}
 
 // ANSI 색상 코드 (터미널 호환)
 const colors = {
@@ -454,6 +475,260 @@ export function registerMonitorCommand(program: Command): void {
 
           // 통계 출력
           printWorkflowStats(stats, limit);
+        } catch (error) {
+          console.log(colorize('Error', 'red'));
+          console.log('');
+          const message = error instanceof Error ? error.message : String(error);
+          console.log(`  ${message}`);
+          process.exitCode = 1;
+        }
+      }
+    );
+
+  // history 서브커맨드
+  monitorCmd
+    .command('history')
+    .description('워크플로우 실행 이력 검색')
+    .option('-c, --config <path>', '설정 파일 경로')
+    .option('-e, --env <name>', '환경 지정')
+    .option('-w, --workflow <id>', '워크플로우 ID로 필터')
+    .option('-s, --status <status>', '상태로 필터 (success, error, running)')
+    .option('--since <date>', '시작 날짜 이후 (YYYY-MM-DD)')
+    .option('--until <date>', '종료 날짜 이전 (YYYY-MM-DD)')
+    .option('-l, --limit <n>', '결과 개수', '50')
+    .action(
+      async (options: {
+        config?: string;
+        env?: string;
+        workflow?: string;
+        status?: string;
+        since?: string;
+        until?: string;
+        limit: string;
+      }) => {
+        // 설정 파일 존재 확인
+        if (!configExists(options.config)) {
+          printNoConfigMessage();
+          process.exitCode = 1;
+          return;
+        }
+
+        const configPath = findConfigPath(options.config);
+        if (configPath) {
+          console.log(`Using config: ${configPath}`);
+        }
+
+        try {
+          // 설정 로드
+          const config = loadConfig(options.config);
+
+          // 환경 선택
+          const envConfig = options.env
+            ? getEnvironment(config, options.env)
+            : getCurrentEnvironment(config);
+
+          // API 클라이언트 생성
+          const client = createClient(envConfig);
+
+          // 필터 구성
+          const filter: ExecutionFilter = {
+            limit: parseInt(options.limit, 10) || 50,
+          };
+
+          if (options.workflow) {
+            filter.workflowId = options.workflow;
+          }
+
+          if (options.status) {
+            const parsedStatus = parseStatusFilter(options.status);
+            if (parsedStatus) {
+              filter.status = parsedStatus;
+            }
+          }
+
+          if (options.since) {
+            const sinceDate = parseDate(options.since);
+            if (sinceDate) {
+              filter.startedAfter = sinceDate;
+            } else {
+              console.log(colorize(`Warning: Invalid date format for --since: ${options.since}`, 'yellow'));
+            }
+          }
+
+          if (options.until) {
+            const untilDate = parseDate(options.until);
+            if (untilDate) {
+              filter.startedBefore = untilDate;
+            } else {
+              console.log(colorize(`Warning: Invalid date format for --until: ${options.until}`, 'yellow'));
+            }
+          }
+
+          // 실행 이력 조회
+          const executions = await getExecutions(client, filter);
+
+          // 출력
+          console.log('');
+          console.log(`${colors.bold}${colors.blue}=== Execution History ===${colors.reset}`);
+
+          // 필터 정보 출력
+          const filterParts: string[] = [];
+          if (options.workflow) filterParts.push(`workflow=${options.workflow}`);
+          if (options.status) filterParts.push(`status=${options.status}`);
+          if (options.since) filterParts.push(`since=${options.since}`);
+          if (options.until) filterParts.push(`until=${options.until}`);
+
+          if (filterParts.length > 0) {
+            console.log(`Filter: ${filterParts.join(', ')}`);
+          }
+          console.log('');
+
+          if (executions.length === 0) {
+            console.log(colorize('No executions found matching the criteria.', 'gray'));
+          } else {
+            console.log(`Found ${colorize(executions.length, 'cyan')} executions:`);
+            console.log(
+              '  ' +
+                colorize(
+                  padString('ID', 12) +
+                    padString('Workflow ID', 20) +
+                    padString('Status', 12) +
+                    padString('Started', 18) +
+                    'Duration',
+                  'gray'
+                )
+            );
+            console.log(
+              '  ' +
+                colorize(
+                  '-'.repeat(12) +
+                    '-'.repeat(20) +
+                    '-'.repeat(12) +
+                    '-'.repeat(18) +
+                    '-'.repeat(10),
+                  'gray'
+                )
+            );
+
+            for (const exec of executions) {
+              const id = padString(String(exec.id), 12);
+              const workflow = padString(exec.workflowId, 20);
+              const started = padString(formatDate(exec.startedAt), 18);
+              const duration = formatDuration(exec.startedAt, exec.stoppedAt);
+
+              const statusText = formatStatus(exec.status);
+              const statusPadding = ' '.repeat(Math.max(0, 12 - exec.status.length));
+
+              console.log(`  ${id}${workflow}${statusText}${statusPadding}${started}${duration}`);
+            }
+          }
+
+          console.log('');
+          console.log(colorize("Use 'n8n-wfm monitor execution <id>' for details", 'gray'));
+        } catch (error) {
+          console.log(colorize('Error', 'red'));
+          console.log('');
+          const message = error instanceof Error ? error.message : String(error);
+          console.log(`  ${message}`);
+          process.exitCode = 1;
+        }
+      }
+    );
+
+  // execution 서브커맨드
+  monitorCmd
+    .command('execution <execution-id>')
+    .description('특정 실행의 상세 정보 조회')
+    .option('-c, --config <path>', '설정 파일 경로')
+    .option('-e, --env <name>', '환경 지정')
+    .option('--show-data', '실행 데이터 표시')
+    .action(
+      async (
+        executionId: string,
+        options: {
+          config?: string;
+          env?: string;
+          showData?: boolean;
+        }
+      ) => {
+        // 설정 파일 존재 확인
+        if (!configExists(options.config)) {
+          printNoConfigMessage();
+          process.exitCode = 1;
+          return;
+        }
+
+        const configPath = findConfigPath(options.config);
+        if (configPath) {
+          console.log(`Using config: ${configPath}`);
+        }
+
+        try {
+          // 설정 로드
+          const config = loadConfig(options.config);
+
+          // 환경 선택
+          const envConfig = options.env
+            ? getEnvironment(config, options.env)
+            : getCurrentEnvironment(config);
+
+          // API 클라이언트 생성
+          const client = createClient(envConfig);
+
+          // 실행 정보 조회
+          const execution = await client.getExecution(executionId);
+
+          // 워크플로우 이름 조회
+          let workflowName = `Workflow ${execution.workflowId}`;
+          try {
+            const wf = await client.getWorkflow(execution.workflowId);
+            workflowName = wf.name;
+          } catch {
+            // 워크플로우 조회 실패 시 기본 이름 사용
+          }
+
+          // 상세 정보 출력
+          console.log('');
+          console.log(`${colors.bold}${colors.blue}=== Execution Details ===${colors.reset}`);
+          console.log(`ID: ${execution.id}`);
+          console.log(`Workflow: ${colorize(workflowName, 'cyan')} (${execution.workflowId})`);
+          console.log('');
+          console.log(`Status: ${formatStatus(execution.status)}`);
+          console.log(`Mode: ${execution.mode}`);
+          console.log('');
+          console.log(`Started: ${formatDate(execution.startedAt)}`);
+          if (execution.stoppedAt) {
+            console.log(`Stopped: ${formatDate(execution.stoppedAt)}`);
+          }
+          console.log(`Duration: ${formatDuration(execution.startedAt, execution.stoppedAt)}`);
+
+          // 에러 상세 정보 (에러 상태인 경우)
+          if (execution.status === 'error' && execution.data?.resultData) {
+            console.log('');
+            console.log(colorize('[Error Details]', 'red'));
+
+            const resultData = execution.data.resultData as Record<string, unknown>;
+
+            // 에러 정보 추출 시도
+            if (resultData.error) {
+              const error = resultData.error as Record<string, unknown>;
+              if (error.node) {
+                console.log(`Node: ${error.node}`);
+              }
+              if (error.message) {
+                console.log(`Message: ${error.message}`);
+              }
+            } else if (resultData.lastNodeExecuted) {
+              console.log(`Last Node: ${resultData.lastNodeExecuted}`);
+            }
+          }
+
+          // 실행 데이터 표시 (--show-data 옵션)
+          if (options.showData && execution.data) {
+            console.log('');
+            console.log(colorize('[Execution Data]', 'cyan'));
+            console.log(JSON.stringify(execution.data, null, 2));
+          }
         } catch (error) {
           console.log(colorize('Error', 'red'));
           console.log('');
