@@ -5,7 +5,7 @@
 
 import type { N8nApiClient } from '../api/client.js';
 import type { Config, CredentialTransform } from '../types/config.js';
-import type { N8nWorkflowDetail, N8nNode } from '../types/n8n.js';
+import type { N8nWorkflowDetail } from '../types/n8n.js';
 import { buildCredentialTransform } from '../config/credentials.js';
 import type {
   DeploymentTarget,
@@ -16,6 +16,7 @@ import type {
   DeploymentSummary,
 } from './types.js';
 import { DEFAULT_DEPLOYMENT_OPTIONS } from './types.js';
+import { transformCredentialsInWorkflow, type TransformResult } from './transform.js';
 
 /**
  * 검증 결과
@@ -199,65 +200,22 @@ export class DeploymentPipeline {
    * @description 워크플로우 내 credential ID를 대상 환경 ID로 변환
    * @param workflow - 원본 워크플로우
    * @param transform - credential 변환 맵
-   * @returns 변환된 워크플로우와 변환 개수
+   * @returns 변환된 워크플로우와 변환 결과
    */
   transformCredentials(
     workflow: N8nWorkflowDetail,
     transform: CredentialTransform
-  ): { workflow: N8nWorkflowDetail; transformedCount: number } {
-    let transformedCount = 0;
+  ): TransformResult {
+    const result = transformCredentialsInWorkflow(workflow, transform);
 
-    // credential ID 매핑 맵 생성 (빠른 조회용)
-    const idMap = new Map<string, string>();
-    for (const mapping of transform.mappings) {
-      idMap.set(mapping.originalId, mapping.newId);
+    // unmapped credentials 경고 로깅
+    if (result.stats.credentialsUnmapped.length > 0) {
+      console.warn(
+        `[${workflow.name}] 매핑되지 않은 credential ID: ${result.stats.credentialsUnmapped.join(', ')}`
+      );
     }
 
-    // 노드의 credential 변환
-    const transformedNodes: N8nNode[] = workflow.nodes.map((node) => {
-      if (!node.credentials) {
-        return node;
-      }
-
-      const transformedCredentials: Record<string, unknown> = {};
-      let nodeTransformed = false;
-
-      for (const [key, value] of Object.entries(node.credentials)) {
-        if (typeof value === 'object' && value !== null) {
-          const credObj = value as Record<string, unknown>;
-          const originalId = String(credObj.id);
-
-          if (idMap.has(originalId)) {
-            transformedCredentials[key] = {
-              ...credObj,
-              id: idMap.get(originalId),
-            };
-            nodeTransformed = true;
-          } else {
-            transformedCredentials[key] = value;
-          }
-        } else {
-          transformedCredentials[key] = value;
-        }
-      }
-
-      if (nodeTransformed) {
-        transformedCount++;
-      }
-
-      return {
-        ...node,
-        credentials: transformedCredentials,
-      };
-    });
-
-    return {
-      workflow: {
-        ...workflow,
-        nodes: transformedNodes,
-      },
-      transformedCount,
-    };
+    return result;
   }
 
   /**
@@ -425,13 +383,14 @@ export class DeploymentPipeline {
     for (const workflow of workflows) {
       try {
         // credential 변환
-        const { workflow: transformed, transformedCount } = this.transformCredentials(
-          workflow,
-          credentialTransform
-        );
+        const transformResult = this.transformCredentials(workflow, credentialTransform);
 
         // 배포
-        const deployed = await this.deploy(transformed, transformedCount, opts);
+        const deployed = await this.deploy(
+          transformResult.workflow,
+          transformResult.stats.credentialsTransformed,
+          opts
+        );
         deployedWorkflows.push(deployed);
 
         // 5. 검증 (skipped가 아닌 경우만)

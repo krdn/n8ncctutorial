@@ -30,3 +30,17 @@ export {
   DEFAULT_TRANSFER_OPTIONS,
 } from './transfer.js';
 export type { TransferOptions, TransferResult } from './transfer.js';
+
+// Credential 변환 유틸리티
+export {
+  transformCredentialsInWorkflow,
+  transformNodeCredentials,
+  extractCredentialId,
+  createCredentialTransformFromConfig,
+} from './transform.js';
+export type {
+  TransformResult,
+  TransformStats,
+  NodeCredentialInfo,
+  NodeTransformResult,
+} from './transform.js';
