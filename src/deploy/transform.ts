@@ -3,8 +3,9 @@
  * @description 워크플로우 내 credential ID를 환경에 맞게 변환하는 기능
  */
 
-import type { CredentialTransform } from '../types/config.js';
+import type { Config, CredentialTransform } from '../types/config.js';
 import type { N8nNode, N8nWorkflowDetail } from '../types/n8n.js';
+import { buildCredentialTransform } from '../config/credentials.js';
 
 /**
  * 노드 내 credential 정보 타입
@@ -152,4 +153,70 @@ export function transformNodeCredentials(
     transformed,
     unmapped,
   };
+}
+
+/**
+ * 워크플로우 내 모든 노드의 credentials 변환
+ * @description 워크플로우 전체를 순회하며 credential ID 변환 수행
+ * @param workflow - 원본 워크플로우
+ * @param credentialTransform - credential 변환 맵
+ * @returns 변환된 워크플로우와 통계
+ *
+ * @example
+ * const result = transformCredentialsInWorkflow(workflow, credentialTransform);
+ * console.log(`Transformed: ${result.stats.credentialsTransformed}`);
+ * if (result.stats.credentialsUnmapped.length > 0) {
+ *   console.warn('Unmapped credentials:', result.stats.credentialsUnmapped);
+ * }
+ */
+export function transformCredentialsInWorkflow(
+  workflow: N8nWorkflowDetail,
+  credentialTransform: CredentialTransform
+): TransformResult {
+  const transformedNodes: N8nNode[] = [];
+  let totalTransformed = 0;
+  const allUnmapped: string[] = [];
+
+  // 모든 노드 순회하며 변환
+  for (const node of workflow.nodes) {
+    const result = transformNodeCredentials(node, credentialTransform);
+    transformedNodes.push(result.node);
+    totalTransformed += result.transformed;
+    allUnmapped.push(...result.unmapped);
+  }
+
+  // 중복 제거된 unmapped 목록
+  const uniqueUnmapped = [...new Set(allUnmapped)];
+
+  return {
+    workflow: {
+      ...workflow,
+      nodes: transformedNodes,
+    },
+    stats: {
+      nodesProcessed: workflow.nodes.length,
+      credentialsTransformed: totalTransformed,
+      credentialsUnmapped: uniqueUnmapped,
+    },
+  };
+}
+
+/**
+ * 설정에서 credential 변환 맵 생성
+ * @description Config 객체와 환경 이름으로 CredentialTransform 생성하는 편의 함수
+ * @param config - 전체 설정 객체
+ * @param sourceEnv - 소스 환경 이름
+ * @param targetEnv - 대상 환경 이름
+ * @returns credential 변환 맵
+ *
+ * @example
+ * const transform = createCredentialTransformFromConfig(config, 'dev', 'prod');
+ * const result = transformCredentialsInWorkflow(workflow, transform);
+ */
+export function createCredentialTransformFromConfig(
+  config: Config,
+  sourceEnv: string,
+  targetEnv: string
+): CredentialTransform {
+  return buildCredentialTransform(config, sourceEnv, targetEnv);
 }
