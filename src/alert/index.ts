@@ -28,3 +28,16 @@ export {
   summarizeResults,
   createAlertMessage,
 } from './send.js';
+
+// 오류 감지 함수 export
+export type { DetectionOptions, DetectionResult, ErrorDetails } from './detector.js';
+export { detectErrors, detectNewErrors, getErrorDetails } from './detector.js';
+
+// 알림 트리거 함수 export
+export type { TriggerResult, TriggerOptions } from './trigger.js';
+export {
+  createErrorAlertMessage,
+  triggerAlertForExecution,
+  triggerAlertsForErrors,
+  createSummaryAlertMessage,
+} from './trigger.js';
